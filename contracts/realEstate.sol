@@ -24,7 +24,7 @@ contract realEstate{
 ///}
 
     function setTax (uint8 _x) public onlyGov {
-        require( _x <= 100, "Valid tax rate  (0% - 100% required)" );
+        require( _x <= 100, "Valid tax rate  (0% - 100%) required" );
         {
             tax = _x;
         }
