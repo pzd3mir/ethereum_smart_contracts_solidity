@@ -64,11 +64,10 @@ uint256 value
 string memory _propertyID,
 string memory _propertySymbol,
 address _mainPropertyOwner,
-uint8 _tax,
-uint256 _initialPropertyShares
+uint8 _tax
 ) {
-balances[_mainPropertyOwner] = _initialPropertyShares;
-totalSupply = _initialPropertyShares;
+balances[_mainPropertyOwner] = 100;
+totalSupply = 100;
 name = _propertyID;
 decimals = 0;
 symbol = _propertySymbol;
@@ -92,28 +91,28 @@ mainPropertyOwner = _mainPropertyOwner;
 //}
 
 
-//function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
-//uint256 allowance = allowed[_from][msg.sender];
-//require(balances[_from] >= _value && allowance >= _value);
-//balances[_to] += _value;
-//balances[_from] -= _value;
-//if (allowance < MAX_UINT256) {
-//allowed[_from][msg.sender] -= _value;
-//}
-//emit Transfer(_from, _to, _value);
-//return true;
-//}
-//function balanceOf(address _owner) public view returns (uint256 balance) {
-//return balances[_owner];
+function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
+uint256 allowance = allowed[_from][msg.sender];
+require(balances[_from] >= _value && allowance >= _value);
+balances[_to] += _value;
+balances[_from] -= _value;
+if (allowance < MAX_UINT256) {
+allowed[_from][msg.sender] -= _value;
 }
-//function approve(address _spender, uint256 _value) public returns (bool success) {
-//allowed[msg.sender][_spender] = _value;
-//emit Approval(msg.sender, _spender, _value);
-//return true;
-//}
-//function allowance(address _owner, address _spender) public view returns (uint256 remaining) {
-//return allowed[_owner][_spender];
-//}
+emit Transfer(_from, _to, _value);
+return true;
+}
+function balanceOf(address _owner) public view returns (uint256 balance) {
+return balances[_owner];
+}
+function approve(address _spender, uint256 _value) public returns (bool success) {
+allowed[msg.sender][_spender] = _value;
+emit Approval(msg.sender, _spender, _value);
+return true;
+}
+function allowance(address _owner, address _spender) public view returns (uint256 remaining) {
+return allowed[_owner][_spender];
+}
 
 
     function setTax (uint8 _x) public onlyGov {
@@ -195,13 +194,33 @@ mainPropertyOwner = _mainPropertyOwner;
     //share for each stakeholder.
     //@param _stakeholder The stakeholder to calculate share for.
 
-   function getShare(address _owner)
+
+
+   function distribute()
        public
-       view
-       returns(uint256)
+       onlyGov
    {
-       return balanceOf(msg.sender) / totalSupply;
+       for (uint256 s = 0; s < stakeholders.length; s += 1){
+           address stakeholder = stakeholders[s];
+           uint256 revenue
+               = address(this).balance;
+           accumulated = accumulated - revenue;
+           revenues[stakeholder]
+               = revenues[stakeholder] + revenue;
+       }
    }
+
+   /**
+    * @notice A method to withdraw revenues.
+    */
+   function withdraw()
+       public
+   {
+       uint256 revenue = revenues[msg.sender];
+       revenues[msg.sender] = 0;
+    (msg.sender).transfer(revenue);
+   }
+
 
 
 
