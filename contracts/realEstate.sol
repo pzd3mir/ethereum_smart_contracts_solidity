@@ -200,20 +200,22 @@ return allowed[_owner][_spender];
        public
        onlyGov
    {
+            uint256 _accumulated = accumulated;
        for (uint256 s = 0; s < stakeholders.length; s += 1){
            address stakeholder = stakeholders[s];
-           uint256 revenue
-               = address(this).balance;
-           accumulated = accumulated - revenue;
+           uint256 revenue = balanceOf(stakeholder);
+
+           uint256 ethertoreceive = (_accumulated/(totalSupply))*revenue;
+           accumulated = accumulated - ethertoreceive;
            revenues[stakeholder]
-               = revenues[stakeholder] + revenue;
+               = revenues[stakeholder] + ethertoreceive;
        }
    }
 
    /**
     * @notice A method to withdraw revenues.
     */
-   function withdraw()
+   function withdraw() payable
        public
    {
        uint256 revenue = revenues[msg.sender];
