@@ -3,10 +3,10 @@ pragma solidity ^0.7.0;
 contract realEstate {
 	// Declare state variables in this section
 
-    uint8 public avgBlockTime;                          // Avg block time in seconds. can be set by onlyGov
-    uint8 private decimals;                              // Decimals of our House shares. Is set to 0 by default.
+	uint8 public avgBlockTime;                          // Avg block time in seconds. can be set by onlyGov
+	uint8 private decimals;                             // Decimals of our House shares. Is set to 0 by default.
 	uint8 public tax;                               	// Can Preset Tax rate in constructor. To be changed by government only.
-	uint8 public rentalLimitMonths;                           // Limits Months in Advance any tenant can pay rent for.
+	uint8 public rentalLimitMonths;                     // Limits Months in Advance any tenant can pay rent for.
 	uint256 public rentalLimitBlocks;                   // Same as above in Blocks.
 	uint256 constant private MAX_UINT256 = 2**256 - 1;  // Very large number. Used here for gov having max allowance for stakeholder tokens to seize tokens if wanted.
 	uint256 public totalSupply;                         // By default we have 100 for 100%. Maybe possible to change later.
@@ -16,15 +16,15 @@ contract realEstate {
 	uint256 public blocksPer30Day;                      // Calculated from avgBlockTime. Acts as tiem measurement for rent.
 	uint256 public rentalBegin;                         // begin of rental(in blocknumber)
 	uint256 public occupiedUntill;                      // Blocknumber untill the Property is occupied.
-	uint256 private _taxdeduct;                          // ammount of tax to be paid for incoming ether.
+	uint256 private _taxdeduct;                         // ammount of tax to be paid for incoming ether.
 
 
 	string public name;                                 // The name of our house (token). Can be determined in Constructor _propertyID
 	string public symbol;                               // The Symbol of our house (token). Can be determined in Constructor _propertySymbol
 
-    address public gov = msg.sender;    	            // Government will deploy contract.
-    address public mainPropertyOwner;                   // mainPropertyOwner can change tenant.Can become mainPropertyOwner by claimOwnership if owning > 51% of token.
-	address public tenant;                             // only tenant can pay the Smart Contract.
+	address public gov = msg.sender;    	            // Government will deploy contract.
+	address public mainPropertyOwner;                   // mainPropertyOwner can change tenant.Can become mainPropertyOwner by claimOwnership if owning > 51% of token.
+	address public tenant;                              // only tenant can pay the Smart Contract.
 
 	address[] public stakeholders;                      // Array of stakeholders. Government can addStakeholder or removeStakeholder. Recipient of token needs to be isStakeholder = true to be able to receive token. mainPropertyOwner & Government are stakeholder by default.
 
@@ -64,9 +64,9 @@ contract realEstate {
 		tax = _tax;
 		mainPropertyOwner = _mainPropertyOwner;
 		stakeholders.push(gov);                             //gov & mainPropertyOwner pushed to stakeholdersarray upon construction to allow payout and transfers
-        stakeholders.push(mainPropertyOwner);
-        allowed[mainPropertyOwner][gov] = MAX_UINT256;      //government can take all token from mainPropertyOwner with seizureFrom
-        avgBlockTime = 13;                                  // 13s per block by default, can be changed by gov with function SetAvgBlockTime
+		stakeholders.push(mainPropertyOwner);
+		allowed[mainPropertyOwner][gov] = MAX_UINT256;      //government can take all token from mainPropertyOwner with seizureFrom
+		avgBlockTime = 13;                                  // 13s per block by default, can be changed by gov with function SetAvgBlockTime
 	    blocksPer30Day = 199385;
 	    rentalLimitMonths = 12;                                   //rental limit in months can be changed by mainPropertyOwner
 	    rentalLimitBlocks = rentalLimitMonths * blocksPer30Day;
