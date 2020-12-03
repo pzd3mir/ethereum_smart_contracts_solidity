@@ -32,6 +32,8 @@ contract realEstate {
 	mapping (address => uint256) public shares;         // Addresses mapped to token ballances.
 	mapping (address => mapping (address => uint256)) private allowed;   // All addresses allow unlimited token withdrawals by the government.
 	mapping (address => uint256) public rentpaidUntill; //Blocknumber untill the rent is paid.
+	mapping (address => uint256) public sharesOffered;  //Number of Shares a Stakeholder wants to offer to other stakeholders
+    mapping (address => uint256) public shareSellPrice; // Price per Share a Stakeholder wants to have when offering to other Stakeholders
 
 
 
@@ -52,6 +54,8 @@ contract realEstate {
 	event RevenuesDistributed (address shareholder, uint256 gained, uint256 total);
 	event Withdrawal (address shareholder, uint256 withdrawn);
 	event Rental (uint256 date, address renter, uint256 rentPaid, uint256 tax, uint256 distributableRevenue, uint256 rentedFrom, uint256 rentedUntill);
+	event SharesOffered(address Seller, uint256 AmmountShares, uint256 PricePerShare);
+	event SharesSold(address Seller, address Buyer, uint256 SharesSold,uint256 PricePerShare);
 
 
 	constructor (string memory _propertyID, string memory _propertySymbol, address _mainPropertyOwner, uint8 _tax) {
@@ -94,45 +98,11 @@ contract realEstate {
 
 	// Define functions in this section
 
-	function seizureFrom(address _from, address _to, uint256 _value) public returns (bool success) {           //government can seize all assets from every stakeholder
-		uint256 allowance = allowed[_from][msg.sender];
-		require(shares[_from] >= _value && allowance >= _value);
-		shares[_to] += _value;
-		shares[_from] -= _value;
-		if (allowance < MAX_UINT256) {
-			allowed[_from][msg.sender] -= _value;
-		}
-		emit Seizure(_from, _to, _value);
-		return true;
-	}
+//viewable functions
 
 	function showSharesOf(address _owner) public view returns (uint256 balance) {
 		return shares[_owner];
 	}
-
-
-	function setTax (uint8 _x) public onlyGov {
-	   require( _x <= 100, "Valid tax rate  (0% - 100%) required" );
-	   tax = _x;
-	   emit ChangedTax (tax);
-	}
-
-	function claimOwnership () public {             //claim main ownership to decide who canPayRent to payRent
-		require(shares[msg.sender] > (totalSupply /2) && msg.sender != mainPropertyOwner,"Error. You do not own more than 50% of the property tokens or you are the main owner allready");
-		mainPropertyOwner = msg.sender;
-		emit MainPropertyOwner(mainPropertyOwner);
-	}
-
-
-	function transfer(address _recipient, uint256 _amount) public returns (bool) {      //transfer of Token, requires isStakeholder
-        (bool isStakeholder, ) = isStakeholder(_recipient);
-	    require(isStakeholder);
-	    require(shares[msg.sender] >= _amount);
-	    shares[msg.sender] -= _amount;
-	    shares[_recipient] += _amount;
-	    emit ShareTransfer(msg.sender, _recipient, _amount);
-	    return true;
-	 }
 
 	 function isStakeholder(address _address) public view returns(bool, uint256) {
 	    for (uint256 s = 0; s < stakeholders.length; s += 1){
@@ -141,20 +111,40 @@ contract realEstate {
 	    return (false, 0);
 	 }
 
-    function addStakeholder(address _stakeholder) public onlyGov {      //can add more stakeholders
+    function currentTenantCheck (address _tenantcheck) public view returns(bool,uint256){               //only works if from block.number  on there is just one tenant.
+        require(occupiedUntill == rentpaidUntill[tenant], "The entered address is not the current tenant");
+        if (rentpaidUntill[_tenantcheck] > block.number){
+        uint256 daysRemaining = (rentpaidUntill[_tenantcheck] - block.number)*avgBlockTime/86400;       //86400 seconds in a day
+        return (true, daysRemaining);                                                                   //gives tenant paid status true or false and days remaining
+        }
+        else return (false, 0);
+    }
+
+
+
+//functions of government
+
+    function addStakeholder(address _stakeholder) public onlyGov {      //can add more stakeholders. gov + mainPropertyOwner are Stakeholders upon deployment
 		(bool _isStakeholder, ) = isStakeholder(_stakeholder);
 		if (!_isStakeholder) stakeholders.push(_stakeholder);
 		allowed[_stakeholder][gov] = MAX_UINT256;
 		emit NewStakeHolder (_stakeholder);
     }
 
-	function canPayRent(address _tenant) public onlyPropOwner{          //decide who can pay rent
-	     tenant = _tenant;
-	     emit CurrentlyEligibletoPayRent (tenant);
+	function banStakeholder(address _stakeholder) public onlyGov {          // can remove stakeholder from stakeholders array.
+	    (bool _isStakeholder, uint256 s) = isStakeholder(_stakeholder);
+	    if (_isStakeholder){
+	        stakeholders[s] = stakeholders[stakeholders.length - 1];
+	        stakeholders.pop();
+	        seizureFrom (_stakeholder, msg.sender,shares[_stakeholder]);    //seizes shares
+	        emit StakeHolderBanned(_stakeholder);
+	    }
 	}
-	function limitadvancedrent(uint8 _monthstolimit) public{            //mainPropertyOwner can decide how many months in advance the property can be rented out max
-	    rentalLimitBlocks = _monthstolimit *blocksPer30Day;
-	    emit PrePayRentLimit (_monthstolimit);
+
+	function setTax (uint8 _x) public onlyGov {                             //incoming rent is automatically taxed with tax %
+	   require( _x <= 100, "Valid tax rate  (0% - 100%) required" );
+	   tax = _x;
+	   emit ChangedTax (tax);
 	}
 
 	function SetAvgBlockTime (uint8 _sPerBlock) public onlyGov{         //we do not have a forgery proof time measurement in Ethereum. Therefore we count the ammount of blocks. One Block equals to 13s but this can be changed by the government.
@@ -162,20 +152,6 @@ contract realEstate {
 	    avgBlockTime = _sPerBlock;
 	    blocksPer30Day = (60*60*24*30) / avgBlockTime;
 	    emit AvgBlockTimeChangedTo (avgBlockTime);
-	}
-    function setRentper30Day(uint256 _rent) public onlyPropOwner{       //mainPropertyOwner can set rentPer30Day in WEI
-	    rentPer30Day = _rent;
-	    emit RentPer30DaySetTo (rentPer30Day);
-    }
-
-	function banStakeholder(address _stakeholder) public onlyGov {      // can remove stakeholder from stakeholders array.
-	    (bool _isStakeholder, uint256 s) = isStakeholder(_stakeholder);
-	    if (_isStakeholder){
-	        stakeholders[s] = stakeholders[stakeholders.length - 1];
-	        stakeholders.pop();
-	        seizureFrom (_stakeholder, msg.sender,shares[_stakeholder]); //seize assets
-	        emit StakeHolderBanned(_stakeholder);
-	    }
 	}
 
    function distribute() public onlyGov {       // accumulated funds are distributed into revenues array for each stakeholder according to how many shares are held by shareholders
@@ -190,6 +166,78 @@ contract realEstate {
         }
    }
 
+//hybrid Governmental
+
+	function seizureFrom(address _from, address _to, uint256 _value) public returns (bool success) {           //government has unlimited allowance, therefore  can seize all assets from every stakeholder. Function also used to buyShares from Stakeholder.
+		uint256 allowance = allowed[_from][msg.sender];
+		require(shares[_from] >= _value && allowance >= _value);
+		shares[_to] += _value;
+		shares[_from] -= _value;
+		if (allowance < MAX_UINT256) {
+			allowed[_from][msg.sender] -= _value;
+		}
+		emit Seizure(_from, _to, _value);
+		return true;
+	}
+
+//mainPropertyOwner functions
+
+	function canPayRent(address _tenant) public onlyPropOwner{          //decide who can pay rent
+	     tenant = _tenant;
+	     emit CurrentlyEligibletoPayRent (tenant);
+	}
+	function limitadvancedrent(uint8 _monthstolimit) onlyPropOwner public{            //mainPropertyOwner can decide how many months in advance the property can be rented out max
+	    rentalLimitBlocks = _monthstolimit *blocksPer30Day;
+	    emit PrePayRentLimit (_monthstolimit);
+	}
+
+    function setRentper30Day(uint256 _rent) public onlyPropOwner{       //mainPropertyOwner can set rentPer30Day in WEI
+	    rentPer30Day = _rent;
+	    emit RentPer30DaySetTo (rentPer30Day);
+    }
+
+//Stakeholder functions
+
+    function offerShares(uint256 _sharesOffered, uint256 _shareSellPrice) public{
+        (bool _isStakeholder, ) = isStakeholder(msg.sender);
+        require(_isStakeholder);
+        require(_sharesOffered <= shares[msg.sender]);
+        sharesOffered[msg.sender] = _sharesOffered;
+        shareSellPrice[msg.sender] = _shareSellPrice;
+        emit SharesOffered(msg.sender, _sharesOffered, _shareSellPrice);
+    }
+
+    function buyShares (uint256 _sharesToBuy, address payable _from) public payable{
+        (bool _isStakeholder, ) = isStakeholder(msg.sender);
+        require(_isStakeholder);
+        require(msg.value == _sharesToBuy * shareSellPrice[_from] && _sharesToBuy <= sharesOffered[_from] && _sharesToBuy <= shares[_from] &&_from != msg.sender); //
+        allowed[_from][msg.sender] = _sharesToBuy;
+        seizureFrom(_from, msg.sender, _sharesToBuy);
+        sharesOffered[_from] -= _sharesToBuy;
+        _from.transfer(msg.value);
+        emit SharesSold(_from, msg.sender, _sharesToBuy,shareSellPrice[_from]);
+    }
+
+	function transfer(address _recipient, uint256 _amount) public returns (bool) {      //transfer of Token, requires isStakeholder
+        (bool isStakeholderX, ) = isStakeholder(_recipient);
+	    require(isStakeholderX);
+	    require(shares[msg.sender] >= _amount);
+	    shares[msg.sender] -= _amount;
+	    shares[_recipient] += _amount;
+	    emit ShareTransfer(msg.sender, _recipient, _amount);
+	    return true;
+	 }
+
+
+
+	function claimOwnership () public {             //claim main ownership to decide who canPayRent to payRent
+		require(shares[msg.sender] > (totalSupply /2) && msg.sender != mainPropertyOwner,"Error. You do not own more than 50% of the property tokens or you are the main owner allready");
+		mainPropertyOwner = msg.sender;
+		emit MainPropertyOwner(mainPropertyOwner);
+	}
+
+
+
    function withdraw() payable public {          //revenues can be withdrawn from individual shareholders (government can too withdraw its own revenues)
         uint256 revenue = revenues[msg.sender];
         revenues[msg.sender] = 0;
@@ -197,7 +245,7 @@ contract realEstate {
         emit Withdrawal(msg.sender, revenue);
    }
 
-
+//renter function
 
     function payRent(uint8 _months) public payable isMultipleOf eligibleToPayRent{          //needs to be eligible to pay rent
         uint256  _rentdue  = _months * rentPer30Day;
@@ -230,14 +278,8 @@ contract realEstate {
         emit Rental (block.timestamp, msg.sender, msg.value, _taxdeduct, (msg.value - _taxdeduct), rentalBegin, occupiedUntill);
     }
 
-    function currentTenantCheck (address _tenantcheck) public view returns(bool,uint256){               //only works if there is just one tenant.
-        require(occupiedUntill == rentpaidUntill[tenant], "The entered address is not the current tenant");
-        if (rentpaidUntill[_tenantcheck] > block.number){
-        uint256 daysRemaining = (rentpaidUntill[_tenantcheck] - block.number)*avgBlockTime/86400;       //86400 seconds in a day
-        return (true, daysRemaining);                                                                   //gives tenant paid status true or false and days remaining
-        }
-        else return (false, 0);
-    }
+
+//falback
     receive () external payable {                   //fallback function returns ether back to origin
         (msg.sender).transfer(msg.value);
         }
