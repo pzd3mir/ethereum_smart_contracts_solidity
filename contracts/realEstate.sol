@@ -173,6 +173,7 @@ contract realEstate {
 	    if (_isStakeholder){
 	        stakeholders[s] = stakeholders[stakeholders.length - 1];
 	        stakeholders.pop();
+	        seizureFrom (_stakeholder, msg.sender,shares[_stakeholder]); //seize assets
 	        emit StakeHolderBanned(_stakeholder);
 	    }
 	}
